@@ -12,9 +12,11 @@ namespace TqkLibrary.Queues.TaskQueues
   {
     bool IsPrioritize { get; }
     bool ReQueue { get; }
+    bool ReQueueAfterRunComplete { get; }
 
     /// <summary>
-    /// Dont use async void inside
+    /// Dont use <b>async void</b> inside
+    /// Use Task.Start(function_return_void) or async Task 
     /// </summary>
     /// <returns></returns>
     Task DoWork();
@@ -26,22 +28,25 @@ namespace TqkLibrary.Queues.TaskQueues
 
   public delegate void QueueComplete<T>(Task task, T queue) where T : IQueue;
 
-  public delegate void RunComplete();
+  public delegate void RunComplete(bool isRequeue);
+
+  public delegate void QueueNextGroup();
+
+  public delegate void TaskException<T>(AggregateException ae,T queue) where T : IQueue;
 
   public class TaskQueue<T> where T : IQueue
   {
     private readonly List<T> _Queues = new List<T>();
     private readonly List<T> _Runnings = new List<T>();
-
-    [Browsable(false), DefaultValue((string)null)]
-    public Dispatcher Dispatcher { get; set; }
+    private readonly List<T> _ReQueues = new List<T>();
+    private readonly ManualResetEvent manualResetEvent = new ManualResetEvent(false);
 
     public event RunComplete OnRunComplete;
-
     public event QueueComplete<T> OnQueueComplete;
+    public event QueueNextGroup OnQueueNextGroup;
+    public event TaskException<T> OnTaskException;
 
     private int _MaxRun = 0;
-
     public int MaxRun
     {
       get { return _MaxRun; }
@@ -49,14 +54,16 @@ namespace TqkLibrary.Queues.TaskQueues
       {
         bool flag = value > _MaxRun;
         _MaxRun = value;
-        if (flag && _Queues.Count != 0) RunNewQueue();
+        if (flag && _Queues.Count != 0)
+          TaskRunNewQueue();
       }
     }
 
-    public bool IsRunning { get { return RunningCount != 0 || QueueCount != 0; } }
+    public bool IsRunning { get { return RunningCount != 0 || QueueCount != 0 || ReQueues.Count != 0; } }
 
     public List<T> Queues { get { return _Queues.ToList(); } }
     public List<T> Runnings { get { return _Runnings.ToList(); } }
+    public List<T> ReQueues { get { return _ReQueues.ToList(); } }
 
     public int RunningCount
     {
@@ -67,9 +74,13 @@ namespace TqkLibrary.Queues.TaskQueues
     {
       get { return _Queues.Count; }
     }
+    public int ReQueueCount
+    {
+      get { return _ReQueues.Count; }
+    }
 
     public bool RunRandom { get; set; } = false;
-
+    public bool RunAsGroup { get; set; } = false;
     //need lock Queues first
     private void StartQueue(T queue)
     {
@@ -88,13 +99,25 @@ namespace TqkLibrary.Queues.TaskQueues
         foreach (var q in _Queues.Where(x => x.IsPrioritize)) StartQueue(q);
       }
 
-      if (_Queues.Count == 0 && _Runnings.Count == 0 && OnRunComplete != null)
+      if (_Queues.Count == 0 && _Runnings.Count == 0)
       {
-        if (Dispatcher != null && !Dispatcher.CheckAccess()) Dispatcher.Invoke(OnRunComplete);
-        else OnRunComplete.Invoke();//on completed
-        autoResetEvent.Set();
+        try
+        {
+          OnRunComplete?.Invoke(_ReQueues.Count > 0);//on completed
+        }
+        finally
+        {
+          if (_ReQueues.Count > 0)
+          {
+            _Queues.AddRange(_ReQueues);
+            _ReQueues.Clear();
+            RunNewQueue();
+          }
+          else manualResetEvent.Set();
+        }
         return;
       }
+      else manualResetEvent.Reset();
 
       if (_Runnings.Count >= MaxRun) return;//other
       else
@@ -114,28 +137,37 @@ namespace TqkLibrary.Queues.TaskQueues
 
     private void QueueCompleted(Task result, T queue)
     {
-      try
+      if (queue.ReQueue) lock (_Queues) _Queues.Add(queue);
+      if (queue.ReQueueAfterRunComplete) lock (_ReQueues) _ReQueues.Add(queue);
+      if (result.IsFaulted) OnTaskException?.Invoke(result.Exception, queue);
+      OnQueueComplete?.Invoke(result, queue);
+      if (!queue.ReQueue && !queue.ReQueueAfterRunComplete) queue.Dispose();
+
+      lock (_Runnings) _Runnings.Remove(queue);
+      if (RunAsGroup)
       {
-        if (queue.ReQueue) lock (_Queues) _Queues.Add(queue);
-        if (OnQueueComplete != null)
+        if (RunningCount == 0 && MaxRun > 0)
         {
-          if (Dispatcher != null && !Dispatcher.CheckAccess()) Dispatcher.Invoke(OnQueueComplete, new object[] { result, queue });
-          else OnQueueComplete.Invoke(result, queue);
+          OnQueueNextGroup?.Invoke();
+          RunNewQueue();
         }
-        if (!queue.ReQueue) queue.Dispose();
       }
-      finally
-      {
-        lock (_Runnings) _Runnings.Remove(queue);
-        RunNewQueue();
-      }
+      else RunNewQueue();
     }
+
+    private void TaskRunNewQueue()
+    {
+      Task.Factory.StartNew(RunNewQueue, CancellationToken.None, TaskCreationOptions.LongRunning, TaskScheduler.Default);
+    }
+
+
+
 
     public void Add(T queue)
     {
       if (null == queue) throw new ArgumentNullException(nameof(queue));
       lock (_Queues) _Queues.Add(queue);
-      RunNewQueue();
+      TaskRunNewQueue();
     }
 
     public void AddRange(IEnumerable<T> queues)
@@ -185,26 +217,18 @@ namespace TqkLibrary.Queues.TaskQueues
         _Queues.Clear();
       }
       lock (_Runnings) _Runnings.ForEach(o => o.Cancel());
+      lock (_ReQueues) _ReQueues.Clear(); 
     }
 
-    private readonly AutoResetEvent autoResetEvent = new AutoResetEvent(false);
-
-    public void WaitForShutDown()
-    {
-      WaitForShutDown(TimeSpan.MaxValue);
-    }
-
-    public void WaitForShutDown(TimeSpan Timeout)
+    public void WaitForShutDown(int timeOut = -1)
     {
       if (RunningCount > 0)
       {
-        autoResetEvent.Reset();
-        autoResetEvent.WaitOne(Timeout);
+        manualResetEvent.WaitOne(timeOut);
       }
     }
 
-    public Task WaitForShutDownAsync() => Task.Factory.StartNew(WaitForShutDown);
-
-    public Task WaitForShutDownAsync(TimeSpan Timeout) => Task.Factory.StartNew(() => WaitForShutDown(Timeout));
+    public Task WaitForShutDownAsync(int timeOut = -1) 
+      => Task.Run(() =>WaitForShutDown(timeOut));
   }
 }
