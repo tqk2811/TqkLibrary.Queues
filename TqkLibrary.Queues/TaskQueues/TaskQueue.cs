@@ -15,7 +15,7 @@ namespace TqkLibrary.Queues.TaskQueues
     bool ReQueueAfterRunComplete { get; }
 
     /// <summary>
-    /// Dont use <b>async void</b> inside
+    /// Dont use <b>async void</b> inside<br/>
     /// Use Task.Start(function_return_void) or async Task 
     /// </summary>
     /// <returns></returns>
@@ -55,7 +55,7 @@ namespace TqkLibrary.Queues.TaskQueues
         bool flag = value > _MaxRun;
         _MaxRun = value;
         if (flag && _Queues.Count != 0)
-          TaskRunNewQueue();
+          RunNewQueue();
       }
     }
 
@@ -80,7 +80,13 @@ namespace TqkLibrary.Queues.TaskQueues
     }
 
     public bool RunRandom { get; set; } = false;
-    public bool RunAsGroup { get; set; } = false;
+
+    /// <summary>
+    /// Ex: Add 10 items, MaxRun = 2. Then 2 next threads will run after 2 threads end
+    /// </summary>
+    public bool RunAsParty { get; set; } = false;
+
+
     //need lock Queues first
     private void StartQueue(T queue)
     {
@@ -88,7 +94,8 @@ namespace TqkLibrary.Queues.TaskQueues
       {
         _Queues.Remove(queue);
         lock (_Runnings) _Runnings.Add(queue);
-        queue.DoWork().ContinueWith(ContinueTaskResult, queue);
+        Task.Factory.StartNew(() => queue.DoWork().Wait(),CancellationToken.None,TaskCreationOptions.LongRunning,TaskScheduler.Default)
+          .ContinueWith(ContinueTaskResult, queue);
       }
     }
 
@@ -144,7 +151,7 @@ namespace TqkLibrary.Queues.TaskQueues
       if (!queue.ReQueue && !queue.ReQueueAfterRunComplete) queue.Dispose();
 
       lock (_Runnings) _Runnings.Remove(queue);
-      if (RunAsGroup)
+      if (RunAsParty)
       {
         if (RunningCount == 0 && MaxRun > 0)
         {
@@ -155,19 +162,16 @@ namespace TqkLibrary.Queues.TaskQueues
       else RunNewQueue();
     }
 
-    private void TaskRunNewQueue()
-    {
-      Task.Factory.StartNew(RunNewQueue, CancellationToken.None, TaskCreationOptions.LongRunning, TaskScheduler.Default);
-    }
-
-
-
+    //public void RunGroup<TGroup>(Func<T,TGroup> func)
+    //{
+    //  //_Queues.gro
+    //}
 
     public void Add(T queue)
     {
       if (null == queue) throw new ArgumentNullException(nameof(queue));
       lock (_Queues) _Queues.Add(queue);
-      TaskRunNewQueue();
+      RunNewQueue();
     }
 
     public void AddRange(IEnumerable<T> queues)
