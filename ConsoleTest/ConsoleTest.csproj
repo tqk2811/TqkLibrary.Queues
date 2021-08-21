@@ -45,9 +45,16 @@
   <ItemGroup>
     <Compile Include="Program.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
+    <Compile Include="TaskQueueTest.cs" />
   </ItemGroup>
   <ItemGroup>
     <None Include="App.config" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\TqkLibrary.Queues\TqkLibrary.Queues.csproj">
+      <Project>{62cf6509-4ceb-44aa-b036-fce535ea0eaa}</Project>
+      <Name>TqkLibrary.Queues</Name>
+    </ProjectReference>
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
 </Project>

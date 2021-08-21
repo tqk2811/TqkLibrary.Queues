@@ -42,7 +42,6 @@ namespace TqkLibrary.Queues.TaskQueues
     public event RunComplete OnRunComplete;
     public event QueueComplete<T> OnQueueComplete;
     public event QueueNextParty OnQueueNextParty;
-    public event TaskException<T> OnTaskException;
 
     private int _MaxRun = 0;
     public int MaxRun
@@ -154,7 +153,6 @@ namespace TqkLibrary.Queues.TaskQueues
         }
       }
       if (queue.ReQueueAfterRunComplete && _ReQueues.IndexOf(queue) == -1) lock (_ReQueues) _ReQueues.Add(queue);
-      if (result.IsFaulted) OnTaskException?.Invoke(result.Exception, queue);
       OnQueueComplete?.Invoke(result, queue);
       if (!queue.ReQueue && !queue.ReQueueAfterRunComplete) queue.Dispose();
 
