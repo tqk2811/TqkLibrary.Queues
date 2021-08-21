@@ -154,7 +154,7 @@ namespace TqkLibrary.Queues.TaskQueues
       }
       if (queue.ReQueueAfterRunComplete && _ReQueues.IndexOf(queue) == -1) lock (_ReQueues) _ReQueues.Add(queue);
       OnQueueComplete?.Invoke(result, queue);
-      if (!queue.ReQueue && !queue.ReQueueAfterRunComplete) queue.Dispose();
+      if (!queue.ReQueue && !queue.ReQueueAfterRunComplete) lock (_Runnings) queue.Dispose();
 
       lock (_Runnings)
       {
@@ -188,23 +188,20 @@ namespace TqkLibrary.Queues.TaskQueues
     {
       if (null == queue) throw new ArgumentNullException(nameof(queue));
       lock (_Queues) _Queues.RemoveAll(o => o.Equals(queue));
-      lock (_Runnings) _Runnings.ForEach(o => { if (o.Equals(queue)) o.Cancel(); });
+      lock (_Runnings) foreach (var q in _Runnings.Where(x => x.Equals(queue))) q.Cancel();
     }
 
     public void Cancel(Func<T, bool> func)
     {
       if (null == func) throw new ArgumentNullException(nameof(func));
-      lock (_Queues)
-      {
-        _Queues.Where(func).ToList().ForEach(x => _Queues.RemoveAll(o => o.Equals(x)));
-      }
+      lock (_Queues) _Queues.RemoveAll(x => func(x));
       lock (_Runnings)
       {
-        _Runnings.Where(func).ToList().ForEach(x =>
+        foreach(var q in _Runnings.Where(func))
         {
-          x.Cancel();
-          _Runnings.RemoveAll(o => o.Equals(x));
-        });
+          q.Cancel();
+          _Runnings.Remove(q);
+        }
       }
     }
 
@@ -223,7 +220,11 @@ namespace TqkLibrary.Queues.TaskQueues
         _Queues.ForEach(o => o.Dispose());
         _Queues.Clear();
       }
-      lock (_Runnings) _Runnings.ForEach(o => o.Cancel());
+      lock (_Runnings) _Runnings.ForEach(o =>
+      {
+        o.Cancel(); 
+        _Runnings.Remove(o);
+      });
       lock (_ReQueues) _ReQueues.Clear(); 
     }
 
