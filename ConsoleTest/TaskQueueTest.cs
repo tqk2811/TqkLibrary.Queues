@@ -18,6 +18,9 @@ namespace ConsoleTest
       taskQueue.OnRunComplete += TaskQueue_OnRunComplete;
       for (int i = 0; i < 500; i++) taskQueue.Add(new JobQueue($"Job_{i:000}"));
       taskQueue.MaxRun = 10;
+      taskQueue.RunAsParty = false;
+      Console.ReadLine();
+      taskQueue.ShutDown();
       Console.ReadLine();
     }
 
@@ -33,7 +36,7 @@ namespace ConsoleTest
 
     private static void TaskQueue_OnQueueComplete(Task task, JobQueue queue)
     {
-      Console.WriteLine($"{DateTime.Now:HH:mm:ss} {nameof(JobQueue)} Completed");
+      Console.WriteLine($"{DateTime.Now:HH:mm:ss} {nameof(JobQueue)} Completed, Requeue: {queue.ReQueue}, Exception:{task.Exception}");
     }
   }
 
@@ -50,10 +53,17 @@ namespace ConsoleTest
     {
       this.JobData = jobData;
     }
+
+    //Ưu tiên chạy ngay lập tức sau khi add vào TaskQueue<T>
+    //Start when add to TaskQueue<T>
     public bool IsPrioritize { get; private set; } = false;
 
+    //If true, This job will re-add to taskqueue after this job completed.
+    //Nếu true, Job này sẽ tự thêm lại vào TaskQueue<T> và xếp hàng chờ chạy lại.
     public bool ReQueue { get; private set; } = false;
 
+    //if true, when all queues completed. This job will re-add to TaskQueue<T>
+    //nếu true, khi tất cả các queue chạy xong. Sẽ thêm vào TaskQueue<T>
     public bool ReQueueAfterRunComplete { get; private set; } = false;
 
     public void Cancel()
@@ -70,6 +80,9 @@ namespace ConsoleTest
     {
       try
       {
+        ReQueue = random.NextDouble() <= 0.10;//random requeue 10%;. 
+        ReQueueAfterRunComplete = false;
+
         Console.WriteLine($"{DateTime.Now:HH:mm:ss} {JobData} Start");
         await Task.Delay(random.Next(1000, 8000), cancellationTokenSource.Token);
       }
