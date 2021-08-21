@@ -21,8 +21,6 @@ namespace TqkLibrary.Queues.TaskQueues
     /// <returns></returns>
     Task DoWork();
 
-    bool CheckEquals(IQueue queue);
-
     void Cancel();
   }
 
@@ -30,7 +28,7 @@ namespace TqkLibrary.Queues.TaskQueues
 
   public delegate void RunComplete(bool isRequeue);
 
-  public delegate void QueueNextGroup();
+  public delegate void QueueNextParty();
 
   public delegate void TaskException<T>(AggregateException ae,T queue) where T : IQueue;
 
@@ -43,7 +41,7 @@ namespace TqkLibrary.Queues.TaskQueues
 
     public event RunComplete OnRunComplete;
     public event QueueComplete<T> OnQueueComplete;
-    public event QueueNextGroup OnQueueNextGroup;
+    public event QueueNextParty OnQueueNextParty;
     public event TaskException<T> OnTaskException;
 
     private int _MaxRun = 0;
@@ -144,22 +142,29 @@ namespace TqkLibrary.Queues.TaskQueues
 
     private void QueueCompleted(Task result, T queue)
     {
-      if (queue.ReQueue) lock (_Queues) _Queues.Add(queue);
-      if (queue.ReQueueAfterRunComplete) lock (_ReQueues) _ReQueues.Add(queue);
+      if (queue.ReQueue)
+      {
+        lock (_Queues)
+        {
+          if (queue.IsPrioritize)
+          {
+            StartQueue(queue);
+          }
+          else if(_Queues.IndexOf(queue) == -1) _Queues.Add(queue);
+        }
+      }
+      if (queue.ReQueueAfterRunComplete && _ReQueues.IndexOf(queue) == -1) lock (_ReQueues) _ReQueues.Add(queue);
       if (result.IsFaulted) OnTaskException?.Invoke(result.Exception, queue);
       OnQueueComplete?.Invoke(result, queue);
       if (!queue.ReQueue && !queue.ReQueueAfterRunComplete) queue.Dispose();
 
-      lock (_Runnings) _Runnings.Remove(queue);
-      if (RunAsParty)
+      lock (_Runnings)
       {
-        if (RunningCount == 0 && MaxRun > 0)
-        {
-          OnQueueNextGroup?.Invoke();
-          RunNewQueue();
-        }
+        _Runnings.Remove(queue);
+        if (RunAsParty && (RunningCount > 0 || MaxRun == 0)) return;
       }
-      else RunNewQueue();
+      if (RunAsParty) OnQueueNextParty?.Invoke();
+      RunNewQueue();
     }
 
     //public void RunGroup<TGroup>(Func<T,TGroup> func)
@@ -184,8 +189,8 @@ namespace TqkLibrary.Queues.TaskQueues
     public void Cancel(T queue)
     {
       if (null == queue) throw new ArgumentNullException(nameof(queue));
-      lock (_Queues) _Queues.RemoveAll(o => o.CheckEquals(queue));
-      lock (_Runnings) _Runnings.ForEach(o => { if (o.CheckEquals(queue)) o.Cancel(); });
+      lock (_Queues) _Queues.RemoveAll(o => o.Equals(queue));
+      lock (_Runnings) _Runnings.ForEach(o => { if (o.Equals(queue)) o.Cancel(); });
     }
 
     public void Cancel(Func<T, bool> func)
@@ -193,14 +198,14 @@ namespace TqkLibrary.Queues.TaskQueues
       if (null == func) throw new ArgumentNullException(nameof(func));
       lock (_Queues)
       {
-        _Queues.Where(func).ToList().ForEach(x => _Queues.RemoveAll(o => o.CheckEquals(x)));
+        _Queues.Where(func).ToList().ForEach(x => _Queues.RemoveAll(o => o.Equals(x)));
       }
       lock (_Runnings)
       {
         _Runnings.Where(func).ToList().ForEach(x =>
         {
           x.Cancel();
-          _Runnings.RemoveAll(o => o.CheckEquals(x));
+          _Runnings.RemoveAll(o => o.Equals(x));
         });
       }
     }
