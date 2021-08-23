@@ -105,20 +105,14 @@ namespace TqkLibrary.Queues.TaskQueues
 
       if (_Queues.Count == 0 && _Runnings.Count == 0)
       {
-        try
+        OnRunComplete?.Invoke(_ReQueues.Count > 0);//on completed
+        if (_ReQueues.Count > 0)
         {
-          OnRunComplete?.Invoke(_ReQueues.Count > 0);//on completed
+          lock (_Queues) _Queues.AddRange(_ReQueues);
+          lock (_ReQueues) _ReQueues.Clear();
+          RunNewQueue();
         }
-        finally
-        {
-          if (_ReQueues.Count > 0)
-          {
-            _Queues.AddRange(_ReQueues);
-            _ReQueues.Clear();
-            RunNewQueue();
-          }
-          else manualResetEvent.Set();
-        }
+        else manualResetEvent.Set();
         return;
       }
       else manualResetEvent.Reset();
@@ -220,11 +214,10 @@ namespace TqkLibrary.Queues.TaskQueues
         _Queues.ForEach(o => o.Dispose());
         _Queues.Clear();
       }
-      lock (_Runnings) _Runnings.ForEach(o =>
+      lock (_Runnings)
       {
-        o.Cancel(); 
-        _Runnings.Remove(o);
-      });
+        _Runnings.ForEach(o => o.Cancel());
+      }
       lock (_ReQueues) _ReQueues.Clear(); 
     }
 
