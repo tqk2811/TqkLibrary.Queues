@@ -4,7 +4,6 @@ using System.ComponentModel;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
-using System.Windows.Threading;
 
 namespace TqkLibrary.Queues.TaskQueues
 {
@@ -188,13 +187,22 @@ namespace TqkLibrary.Queues.TaskQueues
     public void Cancel(Func<T, bool> func)
     {
       if (null == func) throw new ArgumentNullException(nameof(func));
-      lock (_Queues) _Queues.RemoveAll(x => func(x));
+      lock (_Queues)
+      {
+        List<T> removes = new List<T>();
+        foreach (var q in _Queues.Where(x => func(x)))
+        {
+          q.Dispose();
+          removes.Add(q);
+        }
+        removes.ForEach(x => _Queues.Remove(x));
+      }
       lock (_Runnings)
       {
         foreach(var q in _Runnings.Where(func))
         {
           q.Cancel();
-          _Runnings.Remove(q);
+          //_Runnings.Remove(q);
         }
       }
     }
