@@ -99,7 +99,8 @@ namespace TqkLibrary.Queues.TaskQueues
     {
       lock (_Queues)//Prioritize
       {
-        foreach (var q in _Queues.Where(x => x.IsPrioritize)) StartQueue(q);
+        var Prioritizes = _Queues.Where(x => x.IsPrioritize).ToList();
+        foreach (var q in Prioritizes) StartQueue(q);
       }
 
       if (_Queues.Count == 0 && _Runnings.Count == 0)
