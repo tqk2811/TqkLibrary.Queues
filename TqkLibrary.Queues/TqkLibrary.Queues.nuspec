@@ -7,7 +7,7 @@
 		<description>my private lib</description>
 		<authors>tqk2811</authors>
 		<projectUrl>https://github.com/tqk2811/TqkLibrary.Queues</projectUrl>
-		<repository type="git" url="https://github.com/tqk2811/TqkLibrary.Queues.git" branch="$branch$" commit="$commit$"/>
+		<repository type="git" url="https://github.com/tqk2811/TqkLibrary.Queues.git"/>
 		<dependencies>
 		</dependencies>
 	</metadata>
