@@ -82,6 +82,8 @@ namespace TqkLibrary.Queues.TaskQueues
         /// Ex: Add 10 items, MaxRun = 2. Then 2 next threads will run after 2 threads end
         /// </summary>
         public bool RunAsParty { get; set; } = false;
+        public TaskScheduler TaskScheduler { get; set; } = TaskScheduler.FromCurrentSynchronizationContext();
+
 
 
         //need lock Queues first
@@ -91,9 +93,9 @@ namespace TqkLibrary.Queues.TaskQueues
             {
                 _Queues.Remove(queue);
                 lock (_Runnings) _Runnings.Add(queue);
-                Task.Factory.StartNew(queue.DoWork, CancellationToken.None, TaskCreationOptions.LongRunning, TaskScheduler.Default)
+                Task.Factory.StartNew(queue.DoWork, CancellationToken.None, TaskCreationOptions.LongRunning, this.TaskScheduler)
                   .Unwrap()
-                  .ContinueWith(ContinueTaskResult, queue);
+                  .ContinueWith(this.ContinueTaskResult, queue);
             }
         }
 
