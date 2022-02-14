@@ -9,6 +9,15 @@
 		<projectUrl>https://github.com/tqk2811/TqkLibrary.Queues</projectUrl>
 		<repository type="git" url="https://github.com/tqk2811/TqkLibrary.Queues.git"/>
 		<dependencies>
+			<group targetFramework="net462">
+				<dependency id="Nito.AsyncEx" version="[5.1.2,)"/>
+			</group>
+			<group targetFramework="net5.0">
+				<dependency id="Nito.AsyncEx" version="[5.1.2,)"/>
+			</group>
+			<group targetFramework="net6.0">
+				<dependency id="Nito.AsyncEx" version="[5.1.2,)"/>
+			</group>
 		</dependencies>
 	</metadata>
 	<files>
