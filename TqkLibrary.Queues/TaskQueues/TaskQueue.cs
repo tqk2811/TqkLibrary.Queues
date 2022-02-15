@@ -158,7 +158,7 @@ namespace TqkLibrary.Queues.TaskQueues
         public bool RunRandom { get; set; } = false;
 
         /// <summary>
-        /// Ex: Add 10 items, MaxRun = 2. Then 2 next threads will run after 2 threads end
+        /// Ex: Add 10 items, MaxRun = 2. Then 2 next threads will run after 2 Task end
         /// </summary>
         public bool RunAsParty { get; set; } = false;
 
@@ -167,6 +167,10 @@ namespace TqkLibrary.Queues.TaskQueues
         /// </summary>
         public TaskScheduler TaskScheduler { get; set; } = TaskScheduler.Default;
 
+        /// <summary>
+        /// if true use AsyncContext (single thread for asynchronous), default true
+        /// </summary>
+        public bool UseAsyncContext { get; set; } = true;
 
         //need lock Queues first
         private void StartQueue(T queue)
@@ -175,14 +179,25 @@ namespace TqkLibrary.Queues.TaskQueues
             {
                 _Queues.Remove(queue);
                 lock (_Runnings) _Runnings.Add(queue);
-                Task.Factory.StartNew(() =>
+                if (UseAsyncContext)
                 {
-                    AsyncContext.Run(async () => await queue.DoWork());
-                    //SynchronizationContext.SetSynchronizationContext(new SynchronizationContext());
-                    //return queue.DoWork();
-                }, CancellationToken.None, TaskCreationOptions.LongRunning, this.TaskScheduler)
-                  //.Unwrap()
-                  .ContinueWith(this.ContinueTaskResult, queue);
+                    Task.Factory.StartNew(
+                        () => AsyncContext.Run(async () => await queue.DoWork()), 
+                        CancellationToken.None, 
+                        TaskCreationOptions.LongRunning, 
+                        this.TaskScheduler)
+                    .ContinueWith(this.ContinueTaskResult, queue);
+                }
+                else
+                {
+                    Task.Factory.StartNew(
+                        () => queue.DoWork(), 
+                        CancellationToken.None, 
+                        TaskCreationOptions.None,
+                        this.TaskScheduler)
+                    .Unwrap()
+                    .ContinueWith(this.ContinueTaskResult, queue);
+                }
             }
         }
 
