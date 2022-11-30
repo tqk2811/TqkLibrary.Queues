@@ -20,8 +20,8 @@ namespace ConsoleTest
             taskQueue.UseAsyncContext = true;//true: use Nito AsyncContext
             taskQueue.TaskScheduler = TaskScheduler.Default;
             for (int i = 0; i < 20; i++) taskQueue.Add(new JobQueue($"Job_{i:000}"));
-            taskQueue.MaxRun = 5;
-            taskQueue.RunAsParty = false;
+            taskQueue.MaxRun = 5;//số lượng luồng tối đa
+            taskQueue.RunAsParty = false;//true: chạy theo nhóm, tức 5 cái xong mới bắt đầu chạy 5 cái kế.
             Console.ReadLine();
             taskQueue.ShutDown();
             Console.ReadLine();
