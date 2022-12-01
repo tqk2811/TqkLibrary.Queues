@@ -390,7 +390,7 @@ namespace TqkLibrary.Queues.TaskQueues
                 {
                     this.OnRunComplete -= runComplete;
                 }
-                return RunningCount > 0;
+                return RunningCount == 0;
             }
             else return true;
         }
