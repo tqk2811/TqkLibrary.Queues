@@ -77,7 +77,6 @@ namespace TqkLibrary.Queues.TaskQueues
         private readonly List<T> _Queues = new List<T>();
         private readonly List<T> _Runnings = new List<T>();
         private readonly List<T> _ReQueues = new List<T>();
-        private readonly ManualResetEvent manualResetEvent = new ManualResetEvent(false);
         /// <summary>
         /// 
         /// </summary>
@@ -182,17 +181,17 @@ namespace TqkLibrary.Queues.TaskQueues
                 if (UseAsyncContext)
                 {
                     Task.Factory.StartNew(
-                        () => AsyncContext.Run(async () => await queue.DoWork()), 
-                        CancellationToken.None, 
-                        TaskCreationOptions.LongRunning, 
+                        () => AsyncContext.Run(async () => await queue.DoWork()),
+                        CancellationToken.None,
+                        TaskCreationOptions.LongRunning,
                         this.TaskScheduler)
                     .ContinueWith(this.ContinueTaskResult, queue);
                 }
                 else
                 {
                     Task.Factory.StartNew(
-                        () => queue.DoWork(), 
-                        CancellationToken.None, 
+                        () => queue.DoWork(),
+                        CancellationToken.None,
                         TaskCreationOptions.None,
                         this.TaskScheduler)
                     .Unwrap()
@@ -218,10 +217,8 @@ namespace TqkLibrary.Queues.TaskQueues
                     lock (_ReQueues) _ReQueues.Clear();
                     RunNewQueue();
                 }
-                else manualResetEvent.Set();
                 return;
             }
-            else manualResetEvent.Reset();
 
             if (_Runnings.Count >= MaxRun) return;//other
             else
@@ -369,20 +366,33 @@ namespace TqkLibrary.Queues.TaskQueues
         /// </summary>
         /// <param name="timeOut"></param>
         public bool WaitForShutDown(int timeOut = -1)
-        {
-            if (RunningCount > 0)
-            {
-                return manualResetEvent.WaitOne(timeOut);
-            }
-            return true;
-        }
+            => WaitForShutDownAsync(timeOut).ConfigureAwait(false).GetAwaiter().GetResult();
 
         /// <summary>
         /// 
         /// </summary>
         /// <param name="timeOut"></param>
         /// <returns></returns>
-        public Task<bool> WaitForShutDownAsync(int timeOut = -1)
-          => Task.Run(() => WaitForShutDown(timeOut));
+        public async Task<bool> WaitForShutDownAsync(int timeOut = -1)
+        {
+            if (RunningCount > 0)
+            {
+                TaskCompletionSource<bool> taskCompletionSource = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+                using CancellationTokenSource cancellationTokenSource = new CancellationTokenSource(timeOut);
+                using var register = cancellationTokenSource.Token.Register(() => taskCompletionSource.TrySetResult(false));
+                RunComplete runComplete = (bool isRequeue) => taskCompletionSource.TrySetResult(true);
+                try
+                {
+                    this.OnRunComplete += runComplete;
+                    await taskCompletionSource.Task.ConfigureAwait(false);
+                }
+                finally
+                {
+                    this.OnRunComplete -= runComplete;
+                }
+                return RunningCount > 0;
+            }
+            else return true;
+        }
     }
 }
