@@ -1,9 +1,11 @@
 ﻿using Nito.AsyncEx;
 using System;
+using System.Collections;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.ComponentModel;
 using System.Linq;
+using System.Linq.Expressions;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -176,6 +178,8 @@ namespace TqkLibrary.Queues.TaskQueues
         {
             if (null != queue)
             {
+                if (CheckIsLockObject(queue)) return;
+
                 _Queues.Remove(queue);
                 lock (_Runnings) _Runnings.Add(queue);
                 if (UseAsyncContext)
@@ -200,12 +204,33 @@ namespace TqkLibrary.Queues.TaskQueues
             }
         }
 
+        /// <summary>
+        /// Lock <see cref="_Runnings"/>
+        /// </summary>
+        /// <param name="item"></param>
+        /// <returns></returns>
+        bool CheckIsLockObject(T item)
+        {
+            var obj_lock = _RunLockObject.Invoke(item);
+            if (obj_lock != null)
+            {
+                lock (_Runnings)
+                {
+                    return _Runnings.Any(x => obj_lock.Equals(_RunLockObject.Invoke(x)));
+                }
+            }
+            return false;
+        }
+
         private void RunNewQueue()
         {
             lock (_Queues)//Prioritize
             {
                 var Prioritizes = _Queues.Where(x => x.IsPrioritize).ToList();
-                foreach (var q in Prioritizes) StartQueue(q);
+                foreach (var q in Prioritizes)
+                {
+                    StartQueue(q);
+                }
             }
 
             if (_Queues.Count == 0 && _Runnings.Count == 0)
@@ -331,6 +356,22 @@ namespace TqkLibrary.Queues.TaskQueues
             }
         }
 
+        Func<T, object> _RunLockObject = (t) => null;
+        /// <summary>
+        /// Example: object1 + IQueue1<br></br>
+        /// object1 + IQueue2<br></br>
+        /// object2 + IQueue3<br></br>
+        /// MaxRun=3<br></br>
+        /// Then IQueue2 will wait IQueue1 done
+        /// </summary>
+        /// <param name="func">if return object and equal then wait.<br></br>Warning: Don't access TaskQueue from here</param>
+        /// <exception cref="ArgumentNullException"></exception>
+        public void SetRunLockObject(Func<T, object> func)
+        {
+            if (func is null) throw new ArgumentNullException(nameof(func));
+            _RunLockObject = func;
+        }
+
         /// <summary>
         /// 
         /// </summary>
@@ -338,7 +379,7 @@ namespace TqkLibrary.Queues.TaskQueues
         /// <exception cref="ArgumentNullException"></exception>
         public void Reset(T queue)
         {
-            if (null == queue) throw new ArgumentNullException(nameof(queue));
+            if (queue is null) throw new ArgumentNullException(nameof(queue));
             Cancel(queue);
             Add(queue);
         }
