@@ -22,16 +22,6 @@ namespace TqkLibrary.Queues.TaskQueues
         bool IsPrioritize { get; }
 
         /// <summary>
-        /// 
-        /// </summary>
-        bool ReQueue { get; }
-
-        /// <summary>
-        /// ReQueue After AllQueue Completed
-        /// </summary>
-        bool ReQueueAfterRunComplete { get; }
-
-        /// <summary>
         /// Dont use <b>async void</b> inside<br/>
         /// </summary>
         /// <returns></returns>
@@ -42,6 +32,26 @@ namespace TqkLibrary.Queues.TaskQueues
         /// </summary>
         void Cancel();
     }
+
+    /// <summary>
+    /// 
+    /// </summary>
+    public class QueueEventArgs<T> : EventArgs
+    {
+        internal QueueEventArgs(T queue)
+        {
+            this.Queue = queue ?? throw new ArgumentNullException(nameof(queue));
+        }
+        /// <summary>
+        /// 
+        /// </summary>
+        public T Queue { get; }
+        /// <summary>
+        /// Default false
+        /// </summary>
+        public bool ShouldDispose { get; set; } = false;
+    }
+
     /// <summary>
     /// 
     /// </summary>
@@ -49,26 +59,12 @@ namespace TqkLibrary.Queues.TaskQueues
     /// <param name="task"></param>
     /// <param name="queue"></param>
 
-    public delegate void QueueComplete<T>(Task task, T queue) where T : IQueue;
-    /// <summary>
-    /// 
-    /// </summary>
-    /// <param name="isRequeue"></param>
-
-    public delegate void RunComplete(bool isRequeue);
+    public delegate void QueueComplete<T>(Task task, QueueEventArgs<T> queue) where T : IQueue;
     /// <summary>
     /// 
     /// </summary>
 
-    public delegate void QueueNextParty();
-    /// <summary>
-    /// 
-    /// </summary>
-    /// <typeparam name="T"></typeparam>
-    /// <param name="ae"></param>
-    /// <param name="queue"></param>
-
-    public delegate void TaskException<T>(AggregateException ae, T queue) where T : IQueue;
+    public delegate void RunComplete();
 
     /// <summary>
     /// 
@@ -78,7 +74,6 @@ namespace TqkLibrary.Queues.TaskQueues
     {
         private readonly List<T> _Queues = new List<T>();
         private readonly List<T> _Runnings = new List<T>();
-        private readonly List<T> _ReQueues = new List<T>();
         /// <summary>
         /// 
         /// </summary>
@@ -87,10 +82,6 @@ namespace TqkLibrary.Queues.TaskQueues
         /// 
         /// </summary>
         public event QueueComplete<T> OnQueueComplete;
-        /// <summary>
-        /// 
-        /// </summary>
-        public event QueueNextParty OnQueueNextParty;
 
         private int _MaxRun = 0;
 
@@ -112,7 +103,7 @@ namespace TqkLibrary.Queues.TaskQueues
         /// <summary>
         /// 
         /// </summary>
-        public bool IsRunning { get { return RunningCount != 0 || QueueCount != 0 || ReQueues.Count != 0; } }
+        public bool IsRunning { get { return RunningCount != 0 || QueueCount != 0; } }
 
         /// <summary>
         /// 
@@ -123,11 +114,6 @@ namespace TqkLibrary.Queues.TaskQueues
         /// 
         /// </summary>
         public List<T> Runnings { get { return _Runnings.ToList(); } }
-
-        /// <summary>
-        /// 
-        /// </summary>
-        public List<T> ReQueues { get { return _ReQueues.ToList(); } }
 
         /// <summary>
         /// 
@@ -146,22 +132,9 @@ namespace TqkLibrary.Queues.TaskQueues
         }
 
         /// <summary>
-        /// 
-        /// </summary>
-        public int ReQueueCount
-        {
-            get { return _ReQueues.Count; }
-        }
-
-        /// <summary>
-        /// 
+        /// Non FIFO run
         /// </summary>
         public bool RunRandom { get; set; } = false;
-
-        /// <summary>
-        /// Ex: Add 10 items, MaxRun = 2. Then 2 next threads will run after 2 Task end
-        /// </summary>
-        public bool RunAsParty { get; set; } = false;
 
         /// <summary>
         /// 
@@ -169,7 +142,7 @@ namespace TqkLibrary.Queues.TaskQueues
         public TaskScheduler TaskScheduler { get; set; } = TaskScheduler.Default;
 
         /// <summary>
-        /// if true use AsyncContext (single thread for asynchronous), default true
+        /// if true use <see cref="AsyncContext"/> (single thread for asynchronous), default true
         /// </summary>
         public bool UseAsyncContext { get; set; } = true;
 
@@ -189,7 +162,7 @@ namespace TqkLibrary.Queues.TaskQueues
                         CancellationToken.None,
                         TaskCreationOptions.LongRunning,
                         this.TaskScheduler)
-                    .ContinueWith(this.ContinueTaskResult, queue);
+                    .ContinueWith(this.ContinueTaskResult, queue, TaskContinuationOptions.ExecuteSynchronously);
                 }
                 else
                 {
@@ -199,7 +172,7 @@ namespace TqkLibrary.Queues.TaskQueues
                         TaskCreationOptions.None,
                         this.TaskScheduler)
                     .Unwrap()
-                    .ContinueWith(this.ContinueTaskResult, queue);
+                    .ContinueWith(this.ContinueTaskResult, queue, TaskContinuationOptions.RunContinuationsAsynchronously);
                 }
             }
             return 0;
@@ -229,21 +202,12 @@ namespace TqkLibrary.Queues.TaskQueues
             lock (_Queues)//Prioritize
             {
                 var Prioritizes = _Queues.Where(x => x.IsPrioritize).ToList();
-                foreach (var q in Prioritizes)
-                {
-                    skip += StartQueue(q);
-                }
+                foreach (var q in Prioritizes) StartQueue(q);
             }
 
             if (_Queues.Count == 0 && _Runnings.Count == 0)
             {
-                OnRunComplete?.Invoke(_ReQueues.Count > 0);//on completed
-                if (_ReQueues.Count > 0)
-                {
-                    lock (_Queues) _Queues.AddRange(_ReQueues);
-                    lock (_ReQueues) _ReQueues.Clear();
-                    RunNewQueue();
-                }
+                OnRunComplete?.Invoke();//on completed
                 return;
             }
 
@@ -257,7 +221,7 @@ namespace TqkLibrary.Queues.TaskQueues
                     else queue = _Queues.FirstOrDefault();
                     skip += StartQueue(queue);
                 }
-                if (_Queues.Count > 0 && (_Runnings.Count + skip) < MaxRun) RunNewQueue();
+                if (_Queues.Count > 0 && (_Runnings.Count + skip) < MaxRun) Task.Run(RunNewQueue);
             }
         }
 
@@ -265,34 +229,14 @@ namespace TqkLibrary.Queues.TaskQueues
 
         private void QueueCompleted(Task result, T queue)
         {
-            if (queue.ReQueue)
-            {
-                lock (_Queues)
-                {
-                    if (queue.IsPrioritize)
-                    {
-                        StartQueue(queue);
-                    }
-                    else if (_Queues.IndexOf(queue) == -1) _Queues.Add(queue);
-                }
-            }
-            if (queue.ReQueueAfterRunComplete && _ReQueues.IndexOf(queue) == -1) lock (_ReQueues) _ReQueues.Add(queue);
-            OnQueueComplete?.Invoke(result, queue);
-            if (!queue.ReQueue && !queue.ReQueueAfterRunComplete) lock (_Runnings) queue.Dispose();
+            var queueEventArg = new QueueEventArgs<T>(queue);
+            OnQueueComplete?.Invoke(result, queueEventArg);
+            if (queueEventArg.ShouldDispose) queue.Dispose();
 
-            lock (_Runnings)
-            {
-                _Runnings.Remove(queue);
-                if (RunAsParty && (RunningCount > 0 || MaxRun == 0)) return;
-            }
-            if (RunAsParty) OnQueueNextParty?.Invoke();
-            RunNewQueue();
+            lock (_Runnings) _Runnings.Remove(queue);
+
+            Task.Run(RunNewQueue);
         }
-
-        //public void RunGroup<TGroup>(Func<T,TGroup> func)
-        //{
-        //  //_Queues.gro
-        //}
 
         /// <summary>
         /// 
@@ -401,7 +345,6 @@ namespace TqkLibrary.Queues.TaskQueues
             {
                 _Runnings.ForEach(o => o.Cancel());
             }
-            lock (_ReQueues) _ReQueues.Clear();
         }
 
         /// <summary>
@@ -423,7 +366,7 @@ namespace TqkLibrary.Queues.TaskQueues
                 TaskCompletionSource<bool> taskCompletionSource = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
                 using CancellationTokenSource cancellationTokenSource = new CancellationTokenSource(timeOut);
                 using var register = cancellationTokenSource.Token.Register(() => taskCompletionSource.TrySetResult(false));
-                RunComplete runComplete = (bool isRequeue) => taskCompletionSource.TrySetResult(true);
+                RunComplete runComplete = () => taskCompletionSource.TrySetResult(true);
                 try
                 {
                     this.OnRunComplete += runComplete;

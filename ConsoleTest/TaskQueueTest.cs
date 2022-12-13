@@ -14,33 +14,26 @@ namespace ConsoleTest
         public static void Test()
         {
             taskQueue.OnQueueComplete += TaskQueue_OnQueueComplete;
-            taskQueue.OnQueueNextParty += TaskQueue_OnQueueNextParty;
             taskQueue.OnRunComplete += TaskQueue_OnRunComplete;
             taskQueue.RunRandom = false;//true: ngẫu nhiên trong hàng chờ, không theo thứ tự trước sau.
             taskQueue.UseAsyncContext = true;//true: use Nito AsyncContext
             taskQueue.TaskScheduler = TaskScheduler.Default;
             for (int i = 0; i < 20; i++) taskQueue.Add(new JobQueue($"Job_{i:000}"));
             taskQueue.MaxRun = 5;//số lượng luồng tối đa
-            taskQueue.RunAsParty = false;//true: chạy theo nhóm, tức 5 cái xong mới bắt đầu chạy 5 cái kế.
             taskQueue.SetRunLockObject(x => x.IsPrioritize);
             Console.ReadLine();
             taskQueue.ShutDown();
             Console.ReadLine();
         }
 
-        private static void TaskQueue_OnRunComplete(bool isRequeue)
+        private static void TaskQueue_OnRunComplete()
         {
-            Console.WriteLine($"{DateTime.Now:HH:mm:ss} All Run Completed, Is ReRun: {isRequeue}");
+            Console.WriteLine($"{DateTime.Now:HH:mm:ss} All Run Completed");
         }
 
-        private static void TaskQueue_OnQueueNextParty()
+        private static void TaskQueue_OnQueueComplete(Task task, QueueEventArgs<JobQueue> queue)
         {
-            Console.WriteLine($"{DateTime.Now:HH:mm:ss} Party (Max {taskQueue.MaxRun} threads) Completed, Start Run Next Party (Max {taskQueue.MaxRun} threads)");
-        }
-
-        private static void TaskQueue_OnQueueComplete(Task task, JobQueue queue)
-        {
-            Console.WriteLine($"{DateTime.Now:HH:mm:ss} {nameof(JobQueue)} Completed, Requeue: {queue.ReQueue}, Exception:{task.Exception}");
+            Console.WriteLine($"{DateTime.Now:HH:mm:ss} {nameof(JobQueue)} {queue.Queue.JobData} Completed, Exception:{task.Exception}");
         }
     }
 
@@ -62,14 +55,6 @@ namespace ConsoleTest
         //Start when add to TaskQueue<T>
         public bool IsPrioritize { get; private set; } = false;
 
-        //If true, This job will re-add to taskqueue after this job completed.
-        //Nếu true, Job này sẽ tự thêm lại vào TaskQueue<T> và xếp hàng chờ chạy lại.
-        public bool ReQueue { get; private set; } = false;
-
-        //if true, when all queues completed. This job will re-add to TaskQueue<T>
-        //nếu true, khi tất cả các queue chạy xong. Sẽ thêm vào TaskQueue<T>
-        public bool ReQueueAfterRunComplete { get; private set; } = false;
-
         public void Cancel()
         {
             cancellationTokenSource.Cancel();
@@ -84,12 +69,16 @@ namespace ConsoleTest
         {
             try
             {
-                ReQueue = random.NextDouble() <= 0.10;//random requeue 10%;. 
-                ReQueueAfterRunComplete = false;
+                if (random.NextDouble() > 0.9)
+                    throw new Exception();
 
                 Console.WriteLine($"{Thread.CurrentThread.ManagedThreadId:0000} {DateTime.Now:HH:mm:ss} {JobData} Start");
                 await Task.Delay(random.Next(1000, 8000), cancellationTokenSource.Token);
 
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"{Thread.CurrentThread.ManagedThreadId:0000} {DateTime.Now:HH:mm:ss} {JobData} Exception");
             }
             finally
             {
