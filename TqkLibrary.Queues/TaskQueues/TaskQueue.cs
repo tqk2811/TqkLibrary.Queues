@@ -174,11 +174,11 @@ namespace TqkLibrary.Queues.TaskQueues
         public bool UseAsyncContext { get; set; } = true;
 
         //need lock Queues first
-        private void StartQueue(T queue)
+        private int StartQueue(T queue)
         {
-            if (null != queue)
+            if (queue is not null)
             {
-                if (CheckIsLockObject(queue)) return;
+                if (CheckIsLockObject(queue)) return 1;
 
                 _Queues.Remove(queue);
                 lock (_Runnings) _Runnings.Add(queue);
@@ -202,6 +202,7 @@ namespace TqkLibrary.Queues.TaskQueues
                     .ContinueWith(this.ContinueTaskResult, queue);
                 }
             }
+            return 0;
         }
 
         /// <summary>
@@ -224,12 +225,13 @@ namespace TqkLibrary.Queues.TaskQueues
 
         private void RunNewQueue()
         {
+            int skip = 0;
             lock (_Queues)//Prioritize
             {
                 var Prioritizes = _Queues.Where(x => x.IsPrioritize).ToList();
                 foreach (var q in Prioritizes)
                 {
-                    StartQueue(q);
+                    skip += StartQueue(q);
                 }
             }
 
@@ -253,9 +255,9 @@ namespace TqkLibrary.Queues.TaskQueues
                     T queue;
                     if (RunRandom) queue = _Queues.OrderBy(x => Guid.NewGuid()).FirstOrDefault();
                     else queue = _Queues.FirstOrDefault();
-                    StartQueue(queue);
+                    skip += StartQueue(queue);
                 }
-                if (_Queues.Count > 0 && _Runnings.Count < MaxRun) RunNewQueue();
+                if (_Queues.Count > 0 && (_Runnings.Count + skip) < MaxRun) RunNewQueue();
             }
         }
 
