@@ -11,13 +11,16 @@
 		<license type="expression">MIT</license>
 		<dependencies>
 			<group targetFramework="net462">
-				<dependency id="Nito.AsyncEx" version="[5.1.2,)"/>
+				<dependency id="Nito.AsyncEx" version="5.1.2"/>
 			</group>
 			<group targetFramework="net5.0">
-				<dependency id="Nito.AsyncEx" version="[5.1.2,)"/>
+				<dependency id="Nito.AsyncEx" version="5.1.2"/>
 			</group>
 			<group targetFramework="net6.0">
-				<dependency id="Nito.AsyncEx" version="[5.1.2,)"/>
+				<dependency id="Nito.AsyncEx" version="5.1.2"/>
+			</group>
+			<group targetFramework="net7.0">
+				<dependency id="Nito.AsyncEx" version="5.1.2"/>
 			</group>
 		</dependencies>
 	</metadata>
@@ -25,5 +28,6 @@
 		<file src="bin\Release\**\$id$.dll" target="lib\" />
 		<file src="bin\Release\**\$id$.pdb" target="lib\" />
 		<file src="bin\Release\**\$id$.xml" target="lib\" />
+		<file src="**\*.cs" target="src\" exclude="obj\**\*.cs;bin\**\*.cs"/>
 	</files>
 </package>
