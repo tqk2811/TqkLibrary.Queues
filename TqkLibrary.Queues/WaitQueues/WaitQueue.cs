@@ -22,7 +22,6 @@ namespace TqkLibrary.Queues.WaitQueues
     public class WaitQueue
     {
         readonly AsyncLock asyncLock = new AsyncLock();
-        readonly AsyncLock asyncLockAccess = new AsyncLock();
 
         int _currentAccess = 0;
 
