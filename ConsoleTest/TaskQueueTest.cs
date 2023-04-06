@@ -5,6 +5,7 @@ using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using TqkLibrary.Queues.TaskQueues;
+using TqkLibrary.Queues.WaitQueues;
 
 namespace ConsoleTest
 {
@@ -18,9 +19,9 @@ namespace ConsoleTest
             taskQueue.RunRandom = false;//true: ngẫu nhiên trong hàng chờ, không theo thứ tự trước sau.
             taskQueue.UseAsyncContext = true;//true: use Nito AsyncContext
             taskQueue.TaskScheduler = TaskScheduler.Default;
-            for (int i = 0; i < 20; i++) taskQueue.Add(new JobQueue($"Job_{i:000}"));
-            taskQueue.MaxRun = 5;//số lượng luồng tối đa
-            taskQueue.SetRunLockObject(x => x.IsPrioritize);
+            for (int i = 0; i < 100; i++) taskQueue.Add(new JobQueue($"Job_{i:000}"));
+            taskQueue.MaxRun = 10;//số lượng luồng tối đa
+            //taskQueue.SetRunLockObject(x => x.IsPrioritize);
             Console.ReadLine();
             taskQueue.ShutDown();
             Console.ReadLine();
@@ -43,6 +44,7 @@ namespace ConsoleTest
 
     class JobQueue : IQueue
     {
+        static readonly WaitQueue waitQueue = new WaitQueue() { MaxAccess = 2 };
         static readonly Random random = new Random();
         readonly CancellationTokenSource cancellationTokenSource = new CancellationTokenSource();
         public readonly string JobData;
@@ -65,18 +67,26 @@ namespace ConsoleTest
             cancellationTokenSource.Dispose();
         }
 
+        static int count = 0;
         public async Task DoWork()
         {
             try
             {
-                if (random.NextDouble() > 0.9)
-                    throw new Exception();
+                //if (random.NextDouble() > 0.9)
+                //    throw new Exception();
 
-                Console.WriteLine($"{Thread.CurrentThread.ManagedThreadId:0000} {DateTime.Now:HH:mm:ss} {JobData} Start");
-                await Task.Delay(random.Next(1000, 8000), cancellationTokenSource.Token);
+                Console.WriteLine($"{Thread.CurrentThread.ManagedThreadId:0000} {DateTime.Now:HH:mm:ss} {JobData} Start WaitLockAsync");
+                using (var w = await waitQueue.WaitLockAsync())
+                {
+                    count++;
+                    Console.WriteLine($"{Thread.CurrentThread.ManagedThreadId:0000} {DateTime.Now:HH:mm:ss} {JobData} Entered WaitLockAsync ({count})");
+                    await Task.Delay(random.Next(1000, 2000), cancellationTokenSource.Token);
+                    count--;
+                }
+                Console.WriteLine($"{Thread.CurrentThread.ManagedThreadId:0000} {DateTime.Now:HH:mm:ss} {JobData} Exited WaitLockAsync");
 
             }
-            catch (Exception ex)
+            catch (Exception)
             {
                 Console.WriteLine($"{Thread.CurrentThread.ManagedThreadId:0000} {DateTime.Now:HH:mm:ss} {JobData} Exception");
             }
