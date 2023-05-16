@@ -59,12 +59,12 @@ namespace TqkLibrary.Queues.TaskQueues
     /// <param name="task"></param>
     /// <param name="queue"></param>
 
-    public delegate void QueueComplete<T>(Task task, QueueEventArgs<T> queue) where T : IQueue;
+    public delegate Task QueueComplete<T>(Task task, QueueEventArgs<T> queue) where T : IQueue;
     /// <summary>
     /// 
     /// </summary>
 
-    public delegate void RunComplete();
+    public delegate Task RunComplete();
 
     /// <summary>
     /// 
@@ -226,15 +226,15 @@ namespace TqkLibrary.Queues.TaskQueues
 
         private void ContinueTaskResult(Task result, object queue_obj) => QueueCompleted(result, (T)queue_obj);
 
-        private void QueueCompleted(Task result, T queue)
+        private async void QueueCompleted(Task result, T queue)
         {
             var queueEventArg = new QueueEventArgs<T>(queue);
-            OnQueueComplete?.Invoke(result, queueEventArg);
+            await OnQueueComplete?.Invoke(result, queueEventArg);
             if (queueEventArg.ShouldDispose) queue.Dispose();
 
             lock (_Runnings) _Runnings.Remove(queue);
 
-            Task.Run(RunNewQueue);
+            _ = Task.Run(RunNewQueue);//much run on threadpool
         }
 
         /// <summary>
