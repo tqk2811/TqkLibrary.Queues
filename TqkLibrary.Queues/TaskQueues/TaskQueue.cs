@@ -64,7 +64,7 @@ namespace TqkLibrary.Queues.TaskQueues
     /// 
     /// </summary>
 
-    public delegate Task RunComplete();
+    public delegate void RunComplete();
 
     /// <summary>
     /// 
