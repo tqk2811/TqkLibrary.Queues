@@ -158,11 +158,10 @@ namespace TqkLibrary.Queues.TaskQueues
                 if (UseAsyncContext)
                 {
                     Task.Factory.StartNew(
-                        () => AsyncContext.Run(async () => await queue.DoWork()),
+                        () => AsyncContext.Run(async () => await queue.DoWork().ContinueWith(this.ContinueTaskResult, queue, TaskContinuationOptions.ExecuteSynchronously)),
                         CancellationToken.None,
                         TaskCreationOptions.LongRunning,
-                        this.TaskScheduler)
-                    .ContinueWith(this.ContinueTaskResult, queue, TaskContinuationOptions.ExecuteSynchronously);
+                        this.TaskScheduler);
                 }
                 else
                 {
