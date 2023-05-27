@@ -57,9 +57,9 @@ namespace TqkLibrary.Queues.TaskQueues
     /// </summary>
     /// <typeparam name="T"></typeparam>
     /// <param name="task"></param>
-    /// <param name="queue"></param>
+    /// <param name="workEventArgs"></param>
 
-    public delegate Task WorkComplete<T>(Task task, WorkEventArgs<T> queue) where T : IWork;
+    public delegate Task WorkComplete<T>(Task task, WorkEventArgs<T> workEventArgs) where T : IWork;
     /// <summary>
     /// 
     /// </summary>
@@ -81,7 +81,7 @@ namespace TqkLibrary.Queues.TaskQueues
         /// <summary>
         /// 
         /// </summary>
-        public event WorkComplete<T> OnQueueComplete;
+        public event WorkComplete<T> OnWorkComplete;
 
         private int _MaxRun = 0;
 
@@ -96,7 +96,7 @@ namespace TqkLibrary.Queues.TaskQueues
                 bool flag = value > _MaxRun;
                 _MaxRun = value;
                 if (flag && _Queues.Count != 0)
-                    RunNewQueue();
+                    RunNewWork();
             }
         }
 
@@ -108,12 +108,12 @@ namespace TqkLibrary.Queues.TaskQueues
         /// <summary>
         /// 
         /// </summary>
-        public List<T> Queues { get { return _Queues.ToList(); } }
+        public IReadOnlyList<T> Queues { get { return _Queues; } }
 
         /// <summary>
         /// 
         /// </summary>
-        public List<T> Runnings { get { return _Runnings.ToList(); } }
+        public IReadOnlyList<T> Runnings { get { return _Runnings; } }
 
         /// <summary>
         /// 
@@ -195,7 +195,7 @@ namespace TqkLibrary.Queues.TaskQueues
             return false;
         }
 
-        private void RunNewQueue()
+        private void RunNewWork()
         {
             int skip = 0;
             lock (_Queues)//Prioritize
@@ -220,57 +220,57 @@ namespace TqkLibrary.Queues.TaskQueues
                     else queue = _Queues.FirstOrDefault();
                     skip += StartQueue(queue);
                 }
-                if (_Queues.Count > 0 && (_Runnings.Count + skip) < MaxRun) Task.Run(RunNewQueue);
+                if (_Queues.Count > 0 && (_Runnings.Count + skip) < MaxRun) Task.Run(RunNewWork);
             }
         }
 
-        private void ContinueTaskResult(Task result, object queue_obj) => QueueCompleted(result, (T)queue_obj);
+        private void ContinueTaskResult(Task result, object work_obj) => WorkCompleted(result, (T)work_obj);
 
-        private async void QueueCompleted(Task result, T queue)
+        private async void WorkCompleted(Task result, T work)
         {
-            var queueEventArg = new WorkEventArgs<T>(queue);
-            await OnQueueComplete?.Invoke(result, queueEventArg);
-            if (queueEventArg.ShouldDispose) queue.Dispose();
+            var queueEventArg = new WorkEventArgs<T>(work);
+            await OnWorkComplete?.Invoke(result, queueEventArg);
+            if (queueEventArg.ShouldDispose) work.Dispose();
 
-            lock (_Runnings) _Runnings.Remove(queue);
+            lock (_Runnings) _Runnings.Remove(work);
 
-            _ = Task.Run(RunNewQueue);//much run on threadpool
+            _ = Task.Run(RunNewWork);//much run on threadpool
         }
 
         /// <summary>
         /// 
         /// </summary>
-        /// <param name="queue"></param>
+        /// <param name="work"></param>
         /// <exception cref="ArgumentNullException"></exception>
-        public void Add(T queue)
+        public void Add(T work)
         {
-            if (null == queue) throw new ArgumentNullException(nameof(queue));
-            lock (_Queues) _Queues.Add(queue);
-            RunNewQueue();
+            if (work is null) throw new ArgumentNullException(nameof(work));
+            lock (_Queues) _Queues.Add(work);
+            RunNewWork();
         }
 
         /// <summary>
         /// 
         /// </summary>
-        /// <param name="queues"></param>
+        /// <param name="works"></param>
         /// <exception cref="ArgumentNullException"></exception>
-        public void AddRange(IEnumerable<T> queues)
+        public void AddRange(IEnumerable<T> works)
         {
-            if (null == queues) throw new ArgumentNullException(nameof(queues));
-            lock (_Queues) foreach (var queue in queues) _Queues.Add(queue);
-            RunNewQueue();
+            if (null == works) throw new ArgumentNullException(nameof(works));
+            lock (_Queues) foreach (var queue in works) _Queues.Add(queue);
+            RunNewWork();
         }
 
         /// <summary>
         /// 
         /// </summary>
-        /// <param name="queue"></param>
+        /// <param name="work"></param>
         /// <exception cref="ArgumentNullException"></exception>
-        public void Cancel(T queue)
+        public void Cancel(T work)
         {
-            if (null == queue) throw new ArgumentNullException(nameof(queue));
-            lock (_Queues) _Queues.RemoveAll(o => o.Equals(queue));
-            lock (_Runnings) foreach (var q in _Runnings.Where(x => x.Equals(queue))) q.Cancel();
+            if (null == work) throw new ArgumentNullException(nameof(work));
+            lock (_Queues) _Queues.RemoveAll(o => o.Equals(work));
+            lock (_Runnings) foreach (var q in _Runnings.Where(x => x.Equals(work))) q.Cancel();
         }
 
         /// <summary>
@@ -315,18 +315,6 @@ namespace TqkLibrary.Queues.TaskQueues
         {
             if (func is null) throw new ArgumentNullException(nameof(func));
             _RunLockObject = func;
-        }
-
-        /// <summary>
-        /// 
-        /// </summary>
-        /// <param name="queue"></param>
-        /// <exception cref="ArgumentNullException"></exception>
-        public void Reset(T queue)
-        {
-            if (queue is null) throw new ArgumentNullException(nameof(queue));
-            Cancel(queue);
-            Add(queue);
         }
 
         /// <summary>

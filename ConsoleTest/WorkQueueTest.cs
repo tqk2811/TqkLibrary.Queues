@@ -14,7 +14,7 @@ namespace ConsoleTest
         static readonly WorkQueue<JobQueue> taskQueue = new WorkQueue<JobQueue>();
         public static void Test()
         {
-            taskQueue.OnQueueComplete += TaskQueue_OnQueueComplete;
+            taskQueue.OnWorkComplete += TaskQueue_OnWorkComplete;
             taskQueue.OnRunComplete += TaskQueue_OnRunComplete;
             taskQueue.RunRandom = false;//true: ngẫu nhiên trong hàng chờ, không theo thứ tự trước sau.
             taskQueue.UseAsyncContext = true;//true: use Nito AsyncContext
@@ -32,9 +32,10 @@ namespace ConsoleTest
             Console.WriteLine($"{DateTime.Now:HH:mm:ss} All Run Completed");
         }
 
-        private static void TaskQueue_OnQueueComplete(Task task, WorkEventArgs<JobQueue> queue)
+        private static Task TaskQueue_OnWorkComplete(Task task, WorkEventArgs<JobQueue> workEventArgs)
         {
-            Console.WriteLine($"{DateTime.Now:HH:mm:ss} {nameof(JobQueue)} {queue.Work.JobData} Completed, Exception:{task.Exception}");
+            Console.WriteLine($"{DateTime.Now:HH:mm:ss} {nameof(JobQueue)} {workEventArgs.Work.JobData} Completed, Exception:{task.Exception}");
+            return Task.CompletedTask;
         }
     }
 
