@@ -10,7 +10,7 @@ namespace ConsoleTest
   {
     static void Main(string[] args)
     {
-      TaskQueueTest.Test();
+      WorkQueueTest.Test();
     }
   }
 }

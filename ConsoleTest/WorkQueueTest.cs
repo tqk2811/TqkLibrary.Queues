@@ -9,9 +9,9 @@ using TqkLibrary.Queues.WaitQueues;
 
 namespace ConsoleTest
 {
-    static class TaskQueueTest
+    static class WorkQueueTest
     {
-        static readonly TaskQueue<JobQueue> taskQueue = new TaskQueue<JobQueue>();
+        static readonly WorkQueue<JobQueue> taskQueue = new WorkQueue<JobQueue>();
         public static void Test()
         {
             taskQueue.OnQueueComplete += TaskQueue_OnQueueComplete;
@@ -32,9 +32,9 @@ namespace ConsoleTest
             Console.WriteLine($"{DateTime.Now:HH:mm:ss} All Run Completed");
         }
 
-        private static void TaskQueue_OnQueueComplete(Task task, QueueEventArgs<JobQueue> queue)
+        private static void TaskQueue_OnQueueComplete(Task task, WorkEventArgs<JobQueue> queue)
         {
-            Console.WriteLine($"{DateTime.Now:HH:mm:ss} {nameof(JobQueue)} {queue.Queue.JobData} Completed, Exception:{task.Exception}");
+            Console.WriteLine($"{DateTime.Now:HH:mm:ss} {nameof(JobQueue)} {queue.Work.JobData} Completed, Exception:{task.Exception}");
         }
     }
 
@@ -42,7 +42,7 @@ namespace ConsoleTest
 
 
 
-    class JobQueue : IQueue
+    class JobQueue : IWork
     {
         static readonly WaitQueue waitQueue = new WaitQueue() { MaxAccess = 2 };
         static readonly Random random = new Random();

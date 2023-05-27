@@ -14,7 +14,7 @@ namespace TqkLibrary.Queues.TaskQueues
     /// <summary>
     /// 
     /// </summary>
-    public interface IQueue : IDisposable
+    public interface IWork : IDisposable
     {
         /// <summary>
         /// Prioritize
@@ -36,16 +36,16 @@ namespace TqkLibrary.Queues.TaskQueues
     /// <summary>
     /// 
     /// </summary>
-    public class QueueEventArgs<T> : EventArgs
+    public class WorkEventArgs<T> : EventArgs
     {
-        internal QueueEventArgs(T queue)
+        internal WorkEventArgs(T work)
         {
-            this.Queue = queue ?? throw new ArgumentNullException(nameof(queue));
+            this.Work = work ?? throw new ArgumentNullException(nameof(work));
         }
         /// <summary>
         /// 
         /// </summary>
-        public T Queue { get; }
+        public T Work { get; }
         /// <summary>
         /// Default true
         /// </summary>
@@ -59,7 +59,7 @@ namespace TqkLibrary.Queues.TaskQueues
     /// <param name="task"></param>
     /// <param name="queue"></param>
 
-    public delegate Task QueueComplete<T>(Task task, QueueEventArgs<T> queue) where T : IQueue;
+    public delegate Task WorkComplete<T>(Task task, WorkEventArgs<T> queue) where T : IWork;
     /// <summary>
     /// 
     /// </summary>
@@ -70,7 +70,7 @@ namespace TqkLibrary.Queues.TaskQueues
     /// 
     /// </summary>
     /// <typeparam name="T"></typeparam>
-    public class TaskQueue<T> where T : IQueue
+    public class WorkQueue<T> where T : IWork
     {
         private readonly List<T> _Queues = new List<T>();
         private readonly List<T> _Runnings = new List<T>();
@@ -81,7 +81,7 @@ namespace TqkLibrary.Queues.TaskQueues
         /// <summary>
         /// 
         /// </summary>
-        public event QueueComplete<T> OnQueueComplete;
+        public event WorkComplete<T> OnQueueComplete;
 
         private int _MaxRun = 0;
 
@@ -228,7 +228,7 @@ namespace TqkLibrary.Queues.TaskQueues
 
         private async void QueueCompleted(Task result, T queue)
         {
-            var queueEventArg = new QueueEventArgs<T>(queue);
+            var queueEventArg = new WorkEventArgs<T>(queue);
             await OnQueueComplete?.Invoke(result, queueEventArg);
             if (queueEventArg.ShouldDispose) queue.Dispose();
 
