@@ -47,9 +47,9 @@ namespace TqkLibrary.Queues.TaskQueues
         /// </summary>
         public T Queue { get; }
         /// <summary>
-        /// Default false
+        /// Default true
         /// </summary>
-        public bool ShouldDispose { get; set; } = false;
+        public bool ShouldDispose { get; set; } = true;
     }
 
     /// <summary>
