@@ -229,7 +229,10 @@ namespace TqkLibrary.Queues.TaskQueues
         private async void WorkCompleted(Task result, T work)
         {
             var queueEventArg = new WorkEventArgs<T>(work);
-            await OnWorkComplete?.Invoke(result, queueEventArg);
+
+            Task task = OnWorkComplete?.Invoke(result, queueEventArg);
+            if (task is not null) await task;
+
             if (queueEventArg.ShouldDispose) work.Dispose();
 
             lock (_Runnings) _Runnings.Remove(work);
