@@ -245,23 +245,47 @@ namespace TqkLibrary.Queues.TaskQueues
         /// </summary>
         /// <param name="work"></param>
         /// <exception cref="ArgumentNullException"></exception>
-        public void Add(T work)
+        public bool Add(T work)
         {
             if (work is null) throw new ArgumentNullException(nameof(work));
-            lock (_Queues) _Queues.Add(work);
-            RunNewWork();
+            lock (_Queues)
+            {
+                if (_Queues.Add(work))
+                {
+                    RunNewWork();
+                    return true;
+                }
+                return false;
+            }
         }
 
         /// <summary>
         /// 
         /// </summary>
+        /// <returns>Items was not add</returns>
         /// <param name="works"></param>
         /// <exception cref="ArgumentNullException"></exception>
-        public void AddRange(IEnumerable<T> works)
+        public IReadOnlyList<T> AddRange(IEnumerable<T> works)
         {
             if (null == works) throw new ArgumentNullException(nameof(works));
-            lock (_Queues) foreach (var queue in works) _Queues.Add(queue);
-            RunNewWork();
+            int addCount = 0;
+            List<T> result = new List<T>();
+            lock (_Queues)
+            {
+                foreach (var queue in works)
+                {
+                    if (_Queues.Add(queue))
+                    {
+                        addCount++;
+                    }
+                    else
+                    {
+                        result.Add(queue);
+                    }
+                }
+            }
+            if (addCount > 0) RunNewWork();
+            return result;
         }
 
         /// <summary>
@@ -269,7 +293,7 @@ namespace TqkLibrary.Queues.TaskQueues
         /// </summary>
         /// <param name="work"></param>
         /// <exception cref="ArgumentNullException"></exception>
-        public void Cancel(T work)
+        public bool Cancel(T work)
         {
             if (null == work) throw new ArgumentNullException(nameof(work));
             List<T> result = new List<T>();
@@ -277,7 +301,7 @@ namespace TqkLibrary.Queues.TaskQueues
             {
                 if (_Queues.Remove(work))
                 {
-                    return;
+                    return true;
                 }
             }
             lock (_Runnings)
@@ -285,8 +309,10 @@ namespace TqkLibrary.Queues.TaskQueues
                 if (_Runnings.Contains(work))
                 {
                     work.Cancel();
+                    return true;
                 }
             }
+            return false;
         }
 
         /// <summary>
