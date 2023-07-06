@@ -72,8 +72,8 @@ namespace TqkLibrary.Queues.TaskQueues
     /// <typeparam name="T"></typeparam>
     public class WorkQueue<T> where T : IWork
     {
-        private readonly List<T> _Queues = new List<T>();
-        private readonly List<T> _Runnings = new List<T>();
+        private readonly HashSet<T> _Queues = new HashSet<T>();
+        private readonly HashSet<T> _Runnings = new HashSet<T>();
         /// <summary>
         /// 
         /// </summary>
@@ -108,12 +108,12 @@ namespace TqkLibrary.Queues.TaskQueues
         /// <summary>
         /// 
         /// </summary>
-        public IReadOnlyList<T> Queues { get { return _Queues; } }
+        public IReadOnlyCollection<T> Queues { get { return _Queues; } }
 
         /// <summary>
         /// 
         /// </summary>
-        public IReadOnlyList<T> Runnings { get { return _Runnings; } }
+        public IReadOnlyCollection<T> Runnings { get { return _Runnings; } }
 
         /// <summary>
         /// 
@@ -272,8 +272,21 @@ namespace TqkLibrary.Queues.TaskQueues
         public void Cancel(T work)
         {
             if (null == work) throw new ArgumentNullException(nameof(work));
-            lock (_Queues) _Queues.RemoveAll(o => o.Equals(work));
-            lock (_Runnings) foreach (var q in _Runnings.Where(x => x.Equals(work))) q.Cancel();
+            List<T> result = new List<T>();
+            lock (_Queues)
+            {
+                if (_Queues.Remove(work))
+                {
+                    return;
+                }
+            }
+            lock (_Runnings)
+            {
+                if (_Runnings.Contains(work))
+                {
+                    work.Cancel();
+                }
+            }
         }
 
         /// <summary>
@@ -281,13 +294,14 @@ namespace TqkLibrary.Queues.TaskQueues
         /// </summary>
         /// <param name="func"></param>
         /// <exception cref="ArgumentNullException"></exception>
-        public void Cancel(Func<T, bool> func)
+        /// <returns>Items removed in <see cref="Queues"/></returns>
+        public IReadOnlyList<T> Cancel(Func<T, bool> func)
         {
             if (null == func) throw new ArgumentNullException(nameof(func));
+            List<T> removes = new List<T>();
             lock (_Queues)
             {
-                List<T> removes = new List<T>();
-                foreach (var q in _Queues.Where(x => func(x)))
+                foreach (var q in _Queues.Where(func))
                 {
                     q.Dispose();
                     removes.Add(q);
@@ -299,9 +313,9 @@ namespace TqkLibrary.Queues.TaskQueues
                 foreach (var q in _Runnings.Where(func))
                 {
                     q.Cancel();
-                    //_Runnings.Remove(q);
                 }
             }
+            return removes;
         }
 
         Func<T, object> _RunLockObject = (t) => null;
@@ -323,17 +337,17 @@ namespace TqkLibrary.Queues.TaskQueues
         /// <summary>
         /// 
         /// </summary>
-        public void ShutDown()
+        public void ShutDown(int maxRun = 0)
         {
-            MaxRun = 0;
+            MaxRun = maxRun;
             lock (_Queues)
             {
-                _Queues.ForEach(o => o.Dispose());
+                foreach (var queue in _Queues) queue.Dispose();
                 _Queues.Clear();
             }
             lock (_Runnings)
             {
-                _Runnings.ForEach(o => o.Cancel());
+                foreach (var running in _Runnings) running.Cancel();
             }
         }
 
