@@ -11,46 +11,6 @@ using System.Threading.Tasks;
 
 namespace TqkLibrary.Queues.TaskQueues
 {
-    /// <summary>
-    /// 
-    /// </summary>
-    public interface IWork : IDisposable
-    {
-        /// <summary>
-        /// Prioritize
-        /// </summary>
-        bool IsPrioritize { get; }
-
-        /// <summary>
-        /// Dont use <b>async void</b> inside<br/>
-        /// </summary>
-        /// <returns></returns>
-        Task DoWork();
-
-        /// <summary>
-        /// 
-        /// </summary>
-        void Cancel();
-    }
-
-    /// <summary>
-    /// 
-    /// </summary>
-    public class WorkEventArgs<T> : EventArgs
-    {
-        internal WorkEventArgs(T work)
-        {
-            this.Work = work ?? throw new ArgumentNullException(nameof(work));
-        }
-        /// <summary>
-        /// 
-        /// </summary>
-        public T Work { get; }
-        /// <summary>
-        /// Default true
-        /// </summary>
-        public bool ShouldDispose { get; set; } = true;
-    }
 
     /// <summary>
     /// 
@@ -284,7 +244,7 @@ namespace TqkLibrary.Queues.TaskQueues
                     }
                 }
             }
-            if (addCount > 0) RunNewWork();
+            if (addCount > 0) Task.Run(RunNewWork);
             return result;
         }
 
@@ -308,7 +268,7 @@ namespace TqkLibrary.Queues.TaskQueues
             {
                 if (_Runnings.Contains(work))
                 {
-                    work.Cancel();
+                    work.TaskCancel();
                     return true;
                 }
             }
@@ -329,7 +289,7 @@ namespace TqkLibrary.Queues.TaskQueues
             {
                 foreach (var q in _Queues.Where(func))
                 {
-                    q.Dispose();
+                    q.TaskDispose();
                     removes.Add(q);
                 }
                 removes.ForEach(x => _Queues.Remove(x));
@@ -338,7 +298,7 @@ namespace TqkLibrary.Queues.TaskQueues
             {
                 foreach (var q in _Runnings.Where(func))
                 {
-                    q.Cancel();
+                    q.TaskCancel();
                 }
             }
             return removes;
@@ -368,12 +328,12 @@ namespace TqkLibrary.Queues.TaskQueues
             MaxRun = maxRun;
             lock (_Queues)
             {
-                foreach (var queue in _Queues) queue.Dispose();
+                foreach (var queue in _Queues) queue.TaskDispose();
                 _Queues.Clear();
             }
             lock (_Runnings)
             {
-                foreach (var running in _Runnings) running.Cancel();
+                foreach (var running in _Runnings) running.TaskCancel();
             }
         }
 
@@ -410,5 +370,10 @@ namespace TqkLibrary.Queues.TaskQueues
             }
             else return true;
         }
+
+
+
+
+
     }
 }
