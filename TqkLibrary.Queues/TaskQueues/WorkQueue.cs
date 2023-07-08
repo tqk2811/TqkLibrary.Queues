@@ -252,7 +252,7 @@ namespace TqkLibrary.Queues.TaskQueues
             {
                 if (_Queues.Add(work))
                 {
-                    RunNewWork();
+                    Task.Run(RunNewWork);
                     return true;
                 }
                 return false;
