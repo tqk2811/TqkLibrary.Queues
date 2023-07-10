@@ -117,9 +117,8 @@ namespace TqkLibrary.Queues.TaskQueues
         //need lock Queues first
         private bool StartQueue(T queue)
         {
-            if (Monitor.TryEnter(_lock_queues))
+            if (!Monitor.TryEnter(_lock_queues))
             {
-                Monitor.Exit(_lock_queues);
                 return false;
             }
             if (queue is not null)
