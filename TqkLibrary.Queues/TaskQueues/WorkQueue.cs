@@ -33,7 +33,15 @@ namespace TqkLibrary.Queues.TaskQueues
     public class WorkQueue<T> where T : IWork
     {
         private readonly HashSet<T> _Queues = new HashSet<T>();
+        private readonly object _lock_queues = new object();
+
         private readonly HashSet<T> _Runnings = new HashSet<T>();
+        private readonly object _lock_runnings = new object();
+
+        private readonly Random _random = new Random();
+
+
+
         /// <summary>
         /// 
         /// </summary>
@@ -56,7 +64,7 @@ namespace TqkLibrary.Queues.TaskQueues
                 bool flag = value > _MaxRun;
                 _MaxRun = value;
                 if (flag && _Queues.Count != 0)
-                    RunNewWork();
+                    RunNewWorkAsync();
             }
         }
 
@@ -107,14 +115,20 @@ namespace TqkLibrary.Queues.TaskQueues
         public bool UseAsyncContext { get; set; } = true;
 
         //need lock Queues first
-        private int StartQueue(T queue)
+        private bool StartQueue(T queue)
         {
+            if (Monitor.TryEnter(_lock_queues))
+            {
+                Monitor.Exit(_lock_queues);
+                return false;
+            }
             if (queue is not null)
             {
-                if (CheckIsLockObject(queue)) return 1;
+                if (CheckIsLockObject(queue)) return false;
 
                 _Queues.Remove(queue);
-                lock (_Runnings) _Runnings.Add(queue);
+                lock (_lock_runnings) _Runnings.Add(queue);
+
                 if (UseAsyncContext)
                 {
                     Task.Factory.StartNew(
@@ -122,6 +136,7 @@ namespace TqkLibrary.Queues.TaskQueues
                         CancellationToken.None,
                         TaskCreationOptions.LongRunning,
                         this.TaskScheduler);
+                    return true;
                 }
                 else
                 {
@@ -132,9 +147,10 @@ namespace TqkLibrary.Queues.TaskQueues
                         this.TaskScheduler)
                     .Unwrap()
                     .ContinueWith(this.ContinueTaskResult, queue, TaskContinuationOptions.RunContinuationsAsynchronously);
+                    return true;
                 }
             }
-            return 0;
+            return false;
         }
 
         /// <summary>
@@ -147,18 +163,18 @@ namespace TqkLibrary.Queues.TaskQueues
             var obj_lock = _RunLockObject.Invoke(item);
             if (obj_lock != null)
             {
-                lock (_Runnings)
+                lock (_lock_runnings)
                 {
                     return _Runnings.Any(x => obj_lock.Equals(_RunLockObject.Invoke(x)));
                 }
             }
             return false;
         }
-
+        private Task RunNewWorkAsync() => Task.Run(RunNewWork);
         private void RunNewWork()
         {
             int skip = 0;
-            lock (_Queues)//Prioritize
+            lock (_lock_queues)//Prioritize
             {
                 var Prioritizes = _Queues.Where(x => x.IsPrioritize).ToList();
                 foreach (var q in Prioritizes) StartQueue(q);
@@ -173,14 +189,14 @@ namespace TqkLibrary.Queues.TaskQueues
             if (_Runnings.Count >= MaxRun) return;//other
             else
             {
-                lock (_Queues)
+                lock (_lock_queues)
                 {
-                    T queue;
-                    if (RunRandom) queue = _Queues.OrderBy(x => Guid.NewGuid()).FirstOrDefault();
+                    T queue = default(T);
+                    if (RunRandom) queue = _Queues.Count == 0 ? default(T) : _Queues.Skip(_random.Next(_Queues.Count)).FirstOrDefault();
                     else queue = _Queues.FirstOrDefault();
-                    skip += StartQueue(queue);
+                    if (!StartQueue(queue)) skip++;
                 }
-                if (_Queues.Count > 0 && (_Runnings.Count + skip) < MaxRun) Task.Run(RunNewWork);
+                if (_Queues.Count > 0 && (_Runnings.Count + skip) < MaxRun) RunNewWorkAsync();
             }
         }
 
@@ -195,9 +211,9 @@ namespace TqkLibrary.Queues.TaskQueues
 
             if (queueEventArg.ShouldDispose) work.Dispose();
 
-            lock (_Runnings) _Runnings.Remove(work);
+            lock (_lock_runnings) _Runnings.Remove(work);
 
-            _ = Task.Run(RunNewWork);//much run on threadpool
+            _ = RunNewWorkAsync();//much run on threadpool
         }
 
         /// <summary>
@@ -208,11 +224,11 @@ namespace TqkLibrary.Queues.TaskQueues
         public bool Add(T work)
         {
             if (work is null) throw new ArgumentNullException(nameof(work));
-            lock (_Queues)
+            lock (_lock_queues)
             {
                 if (_Queues.Add(work))
                 {
-                    Task.Run(RunNewWork);
+                    RunNewWorkAsync();
                     return true;
                 }
                 return false;
@@ -230,7 +246,7 @@ namespace TqkLibrary.Queues.TaskQueues
             if (null == works) throw new ArgumentNullException(nameof(works));
             int addCount = 0;
             List<T> result = new List<T>();
-            lock (_Queues)
+            lock (_lock_queues)
             {
                 foreach (var queue in works)
                 {
@@ -244,7 +260,7 @@ namespace TqkLibrary.Queues.TaskQueues
                     }
                 }
             }
-            if (addCount > 0) Task.Run(RunNewWork);
+            if (addCount > 0) RunNewWorkAsync();
             return result;
         }
 
@@ -256,15 +272,14 @@ namespace TqkLibrary.Queues.TaskQueues
         public bool Cancel(T work)
         {
             if (null == work) throw new ArgumentNullException(nameof(work));
-            List<T> result = new List<T>();
-            lock (_Queues)
+            lock (_lock_queues)
             {
                 if (_Queues.Remove(work))
                 {
                     return true;
                 }
             }
-            lock (_Runnings)
+            lock (_lock_runnings)
             {
                 if (_Runnings.Contains(work))
                 {
@@ -285,7 +300,7 @@ namespace TqkLibrary.Queues.TaskQueues
         {
             if (null == func) throw new ArgumentNullException(nameof(func));
             List<T> removes = new List<T>();
-            lock (_Queues)
+            lock (_lock_queues)
             {
                 foreach (var q in _Queues.Where(func))
                 {
@@ -294,7 +309,7 @@ namespace TqkLibrary.Queues.TaskQueues
                 }
                 removes.ForEach(x => _Queues.Remove(x));
             }
-            lock (_Runnings)
+            lock (_lock_runnings)
             {
                 foreach (var q in _Runnings.Where(func))
                 {
@@ -326,12 +341,12 @@ namespace TqkLibrary.Queues.TaskQueues
         public void ShutDown(int maxRun = 0)
         {
             MaxRun = maxRun;
-            lock (_Queues)
+            lock (_lock_queues)
             {
                 foreach (var queue in _Queues) queue.TaskDispose();
                 _Queues.Clear();
             }
-            lock (_Runnings)
+            lock (_lock_runnings)
             {
                 foreach (var running in _Runnings) running.TaskCancel();
             }
@@ -370,8 +385,6 @@ namespace TqkLibrary.Queues.TaskQueues
             }
             else return true;
         }
-
-
 
 
 
