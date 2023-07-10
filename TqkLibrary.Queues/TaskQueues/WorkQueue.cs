@@ -212,7 +212,7 @@ namespace TqkLibrary.Queues.TaskQueues
 
             lock (_lock_runnings) _Runnings.Remove(work);
 
-            _ = RunNewWorkAsync();//much run on threadpool
+            if (QueueCount > 0) _ = RunNewWorkAsync();//much run on threadpool
         }
 
         /// <summary>
