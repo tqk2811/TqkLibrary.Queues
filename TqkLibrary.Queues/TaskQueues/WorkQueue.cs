@@ -32,10 +32,10 @@ namespace TqkLibrary.Queues.TaskQueues
     /// <typeparam name="T"></typeparam>
     public class WorkQueue<T> where T : IWork
     {
-        private readonly HashSet<T> _Queues = new HashSet<T>();
+        private readonly List<T> _Queues = new List<T>();
         private readonly object _lock_queues = new object();
 
-        private readonly HashSet<T> _Runnings = new HashSet<T>();
+        private readonly List<T> _Runnings = new List<T>();
         private readonly object _lock_runnings = new object();
 
         private readonly Random _random = new Random();
@@ -76,12 +76,12 @@ namespace TqkLibrary.Queues.TaskQueues
         /// <summary>
         /// 
         /// </summary>
-        public IReadOnlyCollection<T> Queues { get { return _Queues; } }
+        public IReadOnlyList<T> Queues { get { return _Queues; } }
 
         /// <summary>
         /// 
         /// </summary>
-        public IReadOnlyCollection<T> Runnings { get { return _Runnings; } }
+        public IReadOnlyList<T> Runnings { get { return _Runnings; } }
 
         /// <summary>
         /// 
@@ -228,8 +228,9 @@ namespace TqkLibrary.Queues.TaskQueues
             if (work is null) throw new ArgumentNullException(nameof(work));
             lock (_lock_queues)
             {
-                if (_Queues.Add(work))
+                if (!_Queues.Contains(work))
                 {
+                    _Queues.Add(work);
                     RunNewWorkAsync();
                     return true;
                 }
@@ -250,15 +251,16 @@ namespace TqkLibrary.Queues.TaskQueues
             List<T> result = new List<T>();
             lock (_lock_queues)
             {
-                foreach (var queue in works)
+                foreach (var work in works)
                 {
-                    if (_Queues.Add(queue))
+                    if (!_Queues.Contains(work))
                     {
+                        _Queues.Add(work);
                         addCount++;
                     }
                     else
                     {
-                        result.Add(queue);
+                        result.Add(work);
                     }
                 }
             }
