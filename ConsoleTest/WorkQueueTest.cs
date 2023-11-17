@@ -21,7 +21,7 @@ namespace ConsoleTest
             taskQueue.TaskScheduler = TaskScheduler.Default;
             for (int i = 0; i < 100; i++) taskQueue.Add(new JobQueue($"Job_{i:000}"));
             taskQueue.MaxRun = 10;//số lượng luồng tối đa
-            taskQueue.SetRunLockObject(x => x.IsPrioritize);
+            //taskQueue.SetRunLockObject(x => x.IsPrioritize);
             Console.ReadLine();
             taskQueue.ShutDown();
             Console.ReadLine();
