@@ -17,7 +17,7 @@ namespace TqkLibrary.Queues.TaskQueues
         /// Dont use <b>async void</b> inside<br/>
         /// </summary>
         /// <returns></returns>
-        Task DoWork();
+        Task DoWorkAsync();
 
         /// <summary>
         /// 

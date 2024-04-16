@@ -69,7 +69,7 @@ namespace ConsoleTest
         }
 
         static int count = 0;
-        public async Task DoWork()
+        public async Task DoWorkAsync()
         {
             try
             {

@@ -134,7 +134,7 @@ namespace TqkLibrary.Queues.TaskQueues
                 if (UseAsyncContext)
                 {
                     Task.Factory.StartNew(
-                        () => AsyncContext.Run(async () => await queue.DoWork().ContinueWith(this.ContinueTaskResult, queue, TaskContinuationOptions.ExecuteSynchronously)),
+                        () => AsyncContext.Run(async () => await queue.DoWorkAsync().ContinueWith(this.ContinueTaskResult, queue, TaskContinuationOptions.ExecuteSynchronously)),
                         CancellationToken.None,
                         TaskCreationOptions.LongRunning,
                         this.TaskScheduler);
@@ -143,7 +143,7 @@ namespace TqkLibrary.Queues.TaskQueues
                 else
                 {
                     Task.Factory.StartNew(
-                        () => queue.DoWork(),
+                        () => queue.DoWorkAsync(),
                         CancellationToken.None,
                         TaskCreationOptions.None,
                         this.TaskScheduler)

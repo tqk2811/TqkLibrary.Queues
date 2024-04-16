@@ -11,14 +11,6 @@ namespace TqkLibrary.Queues.WaitQueues
     /// <summary>
     /// 
     /// </summary>
-    public interface IWaitHandle : IDisposable
-    {
-
-    }
-
-    /// <summary>
-    /// 
-    /// </summary>
     public class WaitQueue
     {
         readonly AsyncLock asyncLock = new AsyncLock();

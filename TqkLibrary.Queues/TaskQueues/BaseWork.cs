@@ -40,6 +40,6 @@ namespace TqkLibrary.Queues.TaskQueues
         /// 
         /// </summary>
         /// <returns></returns>
-        public abstract Task DoWork();
+        public abstract Task DoWorkAsync();
     }
 }
