@@ -26,7 +26,7 @@ namespace TqkLibrary.Queues.WaitQueues
             get { return _MaxAccess; }
             set { _MaxAccess = value; AccessChanged?.Invoke(); }
         }
-        event Action AccessChanged;
+        event Action? AccessChanged;
         /// <summary>
         /// 
         /// </summary>
