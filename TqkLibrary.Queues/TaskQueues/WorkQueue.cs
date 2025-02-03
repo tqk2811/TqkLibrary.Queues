@@ -26,11 +26,48 @@ namespace TqkLibrary.Queues.TaskQueues
 
     public delegate void RunComplete();
 
+
+    /// <summary>
+    /// 
+    /// </summary>
+    public class WorkQueue
+    {
+        /// <summary>
+        /// 
+        /// </summary>
+        protected readonly Random _random
+#if NET6_0_OR_GREATER
+            = Random.Shared;
+#else
+            = new Random(DateTime.Now.GetHashCode());
+#endif
+        /// <summary>
+        /// 
+        /// </summary>
+        public virtual event RunComplete? OnRunComplete;
+
+        /// <summary>
+        /// Non FIFO run
+        /// </summary>
+        public bool RunRandom { get; set; } = false;
+
+        /// <summary>
+        /// 
+        /// </summary>
+        public TaskScheduler TaskScheduler { get; set; } = TaskScheduler.Default;
+
+        /// <summary>
+        /// if true use <see cref="AsyncContext"/> (single thread for asynchronous), default true
+        /// </summary>
+        public bool UseAsyncContext { get; set; } = true;
+    }
+
     /// <summary>
     /// 
     /// </summary>
     /// <typeparam name="T"></typeparam>
-    public class WorkQueue<T> where T : IWork
+    public class WorkQueue<T> : WorkQueue
+        where T : IWork
     {
         private readonly List<T> _Queues = new List<T>();
         private readonly object _lock_queues = new object();
@@ -38,21 +75,17 @@ namespace TqkLibrary.Queues.TaskQueues
         private readonly List<T> _Runnings = new List<T>();
         private readonly object _lock_runnings = new object();
 
-        private readonly Random _random = new Random();
-
-
 
         /// <summary>
         /// 
         /// </summary>
-        public event RunComplete OnRunComplete;
+        public override event RunComplete? OnRunComplete;
         /// <summary>
         /// 
         /// </summary>
-        public event WorkComplete<T> OnWorkComplete;
+        public event WorkComplete<T>? OnWorkComplete;
 
         private int _MaxRun = 0;
-
         /// <summary>
         /// 
         /// </summary>
@@ -99,23 +132,10 @@ namespace TqkLibrary.Queues.TaskQueues
             get { return _Queues.Count; }
         }
 
-        /// <summary>
-        /// Non FIFO run
-        /// </summary>
-        public bool RunRandom { get; set; } = false;
 
-        /// <summary>
-        /// 
-        /// </summary>
-        public TaskScheduler TaskScheduler { get; set; } = TaskScheduler.Default;
-
-        /// <summary>
-        /// if true use <see cref="AsyncContext"/> (single thread for asynchronous), default true
-        /// </summary>
-        public bool UseAsyncContext { get; set; } = true;
 
         //need lock Queues first
-        private bool StartQueue(T queue)
+        private bool StartQueue(T? queue)
         {
             //bool lockTaken = false;
             //Monitor.Enter(_lock_queues, ref lockTaken);
@@ -193,7 +213,7 @@ namespace TqkLibrary.Queues.TaskQueues
             {
                 lock (_lock_queues)
                 {
-                    T queue = default(T);
+                    T? queue = default(T);
                     if (RunRandom) queue = _Queues.Count == 0 ? default(T) : _Queues.Skip(_random.Next(_Queues.Count)).FirstOrDefault();
                     else queue = _Queues.FirstOrDefault();
                     if (!StartQueue(queue)) skip++;
@@ -202,13 +222,13 @@ namespace TqkLibrary.Queues.TaskQueues
             }
         }
 
-        private void ContinueTaskResult(Task result, object work_obj) => WorkCompleted(result, (T)work_obj);
+        private void ContinueTaskResult(Task result, object? work_obj) => WorkCompleted(result, (T)work_obj!);
 
         private async void WorkCompleted(Task result, T work)
         {
             var queueEventArg = new WorkEventArgs<T>(work);
 
-            Task task = OnWorkComplete?.Invoke(result, queueEventArg);
+            Task? task = OnWorkComplete?.Invoke(result, queueEventArg);
             if (task is not null) await task;
 
             if (queueEventArg.ShouldDispose) work.Dispose();
@@ -323,7 +343,7 @@ namespace TqkLibrary.Queues.TaskQueues
             return removes;
         }
 
-        Func<T, object> _RunLockObject = (t) => null;
+        Func<T, object?> _RunLockObject = (t) => null;
         /// <summary>
         /// Example: object1 + IQueue1<br></br>
         /// object1 + IQueue2<br></br>
@@ -389,8 +409,6 @@ namespace TqkLibrary.Queues.TaskQueues
             }
             else return true;
         }
-
-
 
     }
 }
